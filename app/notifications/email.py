@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 
+def daily_report(lines: list[str]) -> str:
+    return ("Daily NOI report\n" + "\n".join(lines)).rstrip()
+
+
+def monthly_report(lines: list[str]) -> str:
+    return ("Monthly NOI report\n" + "\n".join(lines)).rstrip()
+
+
 def weekly_report(lines: list[str]) -> str:
     body = "\n".join(lines)
     return (
