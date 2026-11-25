@@ -12,3 +12,11 @@ Recovery check:
 2. Run `python3 -m pytest`.
 3. Confirm health is `degraded` or `down` until the required provider is connected.
 4. Confirm a second delivery of the same signal id and category is suppressed.
+
+Quote check:
+
+```bash
+python3 scripts/fetch_quotes.py
+```
+
+The script stores Nifty, Bank Nifty, and India VIX. It does not send a message and does not place an order. A quote older than 20 minutes is stored as stale.
