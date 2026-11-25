@@ -1,0 +1,102 @@
+"""Indicators. Index i depends only on observations 0..i."""
+
+from __future__ import annotations
+
+from decimal import Decimal, ROUND_HALF_UP
+
+
+def _q(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+
+
+def ema(values: list[Decimal], period: int) -> list[Decimal | None]:
+    if period < 1:
+        raise ValueError("period must be positive")
+    out: list[Decimal | None] = [None] * len(values)
+    if len(values) < period:
+        return out
+    seed = sum(values[:period], Decimal(0)) / Decimal(period)
+    out[period - 1] = _q(seed)
+    alpha = Decimal(2) / Decimal(period + 1)
+    previous = seed
+    for index in range(period, len(values)):
+        previous = values[index] * alpha + previous * (1 - alpha)
+        out[index] = _q(previous)
+    return out
+
+
+def sma(values: list[Decimal], period: int) -> list[Decimal | None]:
+    out: list[Decimal | None] = [None] * len(values)
+    if period < 1:
+        raise ValueError("period must be positive")
+    running = Decimal(0)
+    for index, value in enumerate(values):
+        running += value
+        if index >= period:
+            running -= values[index - period]
+        if index >= period - 1:
+            out[index] = _q(running / Decimal(period))
+    return out
+
+
+def true_ranges(highs: list[Decimal], lows: list[Decimal], closes: list[Decimal]) -> list[Decimal]:
+    ranges: list[Decimal] = []
+    for index, (high, low) in enumerate(zip(highs, lows)):
+        if index == 0:
+            ranges.append(high - low)
+            continue
+        previous_close = closes[index - 1]
+        ranges.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
+    return ranges
+
+
+def atr(highs: list[Decimal], lows: list[Decimal], closes: list[Decimal], period: int) -> list[Decimal | None]:
+    return ema(true_ranges(highs, lows, closes), period)
+
+
+def rsi(closes: list[Decimal], period: int = 14) -> list[Decimal | None]:
+    if period < 1:
+        raise ValueError("period must be positive")
+    out: list[Decimal | None] = [None] * len(closes)
+    if len(closes) <= period:
+        return out
+    gains: list[Decimal] = []
+    losses: list[Decimal] = []
+    for index in range(1, period + 1):
+        change = closes[index] - closes[index - 1]
+        gains.append(max(change, Decimal(0)))
+        losses.append(max(-change, Decimal(0)))
+    avg_gain = sum(gains, Decimal(0)) / Decimal(period)
+    avg_loss = sum(losses, Decimal(0)) / Decimal(period)
+    out[period] = _rsi_value(avg_gain, avg_loss)
+    for index in range(period + 1, len(closes)):
+        change = closes[index] - closes[index - 1]
+        gain = max(change, Decimal(0))
+        loss = max(-change, Decimal(0))
+        avg_gain = (avg_gain * (period - 1) + gain) / Decimal(period)
+        avg_loss = (avg_loss * (period - 1) + loss) / Decimal(period)
+        out[index] = _rsi_value(avg_gain, avg_loss)
+    return out
+
+
+def _rsi_value(avg_gain: Decimal, avg_loss: Decimal) -> Decimal:
+    if avg_loss == 0:
+        return Decimal("100")
+    relative = avg_gain / avg_loss
+    return _q(Decimal(100) - (Decimal(100) / (1 + relative)))
+
+
+def bollinger_width(closes: list[Decimal], period: int = 20, stdevs: Decimal = Decimal(2)) -> list[Decimal | None]:
+    mids = sma(closes, period)
+    out: list[Decimal | None] = [None] * len(closes)
+    for index, mid in enumerate(mids):
+        if mid is None or mid == 0:
+            continue
+        window = closes[index - period + 1 : index + 1]
+        mean = sum(window, Decimal(0)) / Decimal(period)
+        variance = sum((point - mean) ** 2 for point in window) / Decimal(period)
+        sigma = variance.sqrt()
+        upper = mid + stdevs * sigma
+        lower = mid - stdevs * sigma
+        out[index] = _q((upper - lower) / mid)
+    return out
