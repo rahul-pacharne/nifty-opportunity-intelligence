@@ -34,10 +34,16 @@ class StoredDecision:
 
 
 class DecisionLoop:
-    def __init__(self, repository: ObservationRepository | None = None, calendar: MarketCalendar | None = None) -> None:
+    def __init__(
+        self,
+        repository: ObservationRepository | None = None,
+        calendar: MarketCalendar | None = None,
+        store=None,
+    ) -> None:
         self.repository = repository or ObservationRepository(calendar)
         self.calendar = calendar or MarketCalendar()
-        self.records: list[StoredDecision] = []
+        self.store = store
+        self.records: list[StoredDecision] = list(store.load_decisions()) if store is not None else []
 
     def load(self, bars: list[Bar]) -> None:
         for bar in bars:
@@ -129,6 +135,12 @@ class DecisionLoop:
     def _append(self, **kwargs: object) -> StoredDecision:
         record = StoredDecision(**kwargs)  # type: ignore[arg-type]
         self.records.append(record)
+        if self.store is not None:
+            try:
+                self.store.save_decision(record)
+            except Exception:
+                self.records.pop()
+                raise
         return record
 
 

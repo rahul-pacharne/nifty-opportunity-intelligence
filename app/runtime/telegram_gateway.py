@@ -27,12 +27,20 @@ class MemoryTransport:
 
 
 class TelegramGateway:
-    def __init__(self, allowed_user_ids: tuple[str, ...], transport: MemoryTransport, book: PositionBook, rules: ExitRules) -> None:
+    def __init__(
+        self,
+        allowed_user_ids: tuple[str, ...],
+        transport: MemoryTransport,
+        book: PositionBook,
+        rules: ExitRules,
+        store=None,
+    ) -> None:
         self.allowed = set(allowed_user_ids)
         self.transport = transport
         self.book = book
         self.rules = rules
-        self.sent: set[tuple[str, str]] = set()
+        self.store = store
+        self.sent: set[tuple[str, str]] = set(store.load_sent()) if store is not None else set()
         self.deliveries: list[tuple[str, str, str, str]] = []
         self.signals: list[str] = []
 
@@ -51,6 +59,8 @@ class TelegramGateway:
                 self.transport.send(chat_id, text)
             except ConnectionError:
                 continue
+            if self.store is not None:
+                self.store.save_delivery(chat_id, signal_id, alert_type, "sent", attempts, text)
             self.sent.add(key)
             self.deliveries.append((chat_id, signal_id, alert_type, "sent"))
             return "sent"

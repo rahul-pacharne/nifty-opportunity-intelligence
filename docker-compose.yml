@@ -10,6 +10,7 @@ services:
     volumes:
       - noi-pg:/var/lib/postgresql/data
       - ./migrations/001_market_observations.sql:/docker-entrypoint-initdb.d/001_market_observations.sql:ro
+      - ./migrations/002_runtime_persistence.sql:/docker-entrypoint-initdb.d/002_runtime_persistence.sql:ro
 
 volumes:
   noi-pg:

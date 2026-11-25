@@ -8,7 +8,7 @@ Database backups are a deployment responsibility. This repository ships the sche
 
 Recovery check:
 
-1. Start Postgres and apply `migrations/001_market_observations.sql` if the volume is new.
+1. Start Postgres and apply pending files in `migrations/` with `python3 scripts/check_database.py`. The script uses `NOI_DATABASE_URL` and writes one audit row.
 2. Run `python3 -m pytest`.
 3. Confirm health is `degraded` or `down` until the required provider is connected.
 4. Confirm a second delivery of the same signal id and category is suppressed.
