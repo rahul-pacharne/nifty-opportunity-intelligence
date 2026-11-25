@@ -20,3 +20,11 @@ python3 scripts/fetch_quotes.py
 ```
 
 The script stores Nifty, Bank Nifty, and India VIX. It does not send a message and does not place an order. A quote older than 20 minutes is stored as stale.
+
+Clock check:
+
+```bash
+python3 scripts/run_scheduled_check.py
+```
+
+Outside an entry window the command prints the activity and `sent: none`. It does not fetch and it does not send Telegram. Buy and sell stay off.
