@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
 from urllib.error import HTTPError
+from zoneinfo import ZoneInfo
 
 from app.data.models import latest_session_bars
 from app.data.models import Bar
@@ -51,6 +52,20 @@ def test_quotes_use_the_last_price_and_the_exchange_time() -> None:
     assert nifty.publication_at.utcoffset() == timedelta(hours=5, minutes=30)
     assert nifty.source == "upstox"
     assert [bar.instrument_id for bar in result.bars] == ["NIFTY", "BANKNIFTY", "INDIA_VIX"]
+
+
+def test_last_trade_time_wins_over_a_fresh_feed_clock() -> None:
+    trade = datetime(2026, 11, 25, 15, 29, 59, tzinfo=ZoneInfo("Asia/Kolkata"))
+    payload = _payload()
+    quote = payload["data"]["NSE_INDEX:Nifty 50"]
+    quote["timestamp"] = "2026-11-25T23:00:00+05:30"
+    quote["last_trade_time"] = str(int(trade.timestamp() * 1000))
+    now = datetime(2026, 11, 25, 17, 31, tzinfo=timezone.utc)
+    result = parse_index_quotes(payload, now=now)
+    nifty = result.bars[0]
+    assert nifty.observation_at == trade
+    assert nifty.publication_at == trade
+    assert now - nifty.observation_at > timedelta(minutes=20)
 
 
 def test_a_missing_series_is_incomplete() -> None:
