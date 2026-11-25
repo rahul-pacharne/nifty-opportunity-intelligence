@@ -54,6 +54,51 @@ def atr(highs: list[Decimal], lows: list[Decimal], closes: list[Decimal], period
     return ema(true_ranges(highs, lows, closes), period)
 
 
+def adx(highs: list[Decimal], lows: list[Decimal], closes: list[Decimal], period: int = 14) -> list[Decimal | None]:
+    """Wilder ADX. Index i uses only bars 0..i."""
+    if period < 1:
+        raise ValueError("period must be positive")
+    size = len(closes)
+    out: list[Decimal | None] = [None] * size
+    if size <= period * 2 or not (len(highs) == size == len(lows)):
+        return out
+    plus_dm: list[Decimal] = [Decimal(0)]
+    minus_dm: list[Decimal] = [Decimal(0)]
+    ranges = true_ranges(highs, lows, closes)
+    for index in range(1, size):
+        up = highs[index] - highs[index - 1]
+        down = lows[index - 1] - lows[index]
+        plus_dm.append(up if up > down and up > 0 else Decimal(0))
+        minus_dm.append(down if down > up and down > 0 else Decimal(0))
+    tr_smooth = sum(ranges[1 : period + 1], Decimal(0))
+    plus_smooth = sum(plus_dm[1 : period + 1], Decimal(0))
+    minus_smooth = sum(minus_dm[1 : period + 1], Decimal(0))
+    dx_values: list[Decimal] = []
+    for index in range(period + 1, size):
+        tr_smooth = tr_smooth - (tr_smooth / Decimal(period)) + ranges[index]
+        plus_smooth = plus_smooth - (plus_smooth / Decimal(period)) + plus_dm[index]
+        minus_smooth = minus_smooth - (minus_smooth / Decimal(period)) + minus_dm[index]
+        if tr_smooth == 0:
+            dx_values.append(Decimal(0))
+            continue
+        plus_di = Decimal(100) * plus_smooth / tr_smooth
+        minus_di = Decimal(100) * minus_smooth / tr_smooth
+        total = plus_di + minus_di
+        dx_values.append(Decimal(0) if total == 0 else Decimal(100) * abs(plus_di - minus_di) / total)
+    if len(dx_values) < period:
+        return out
+    adx_value = sum(dx_values[:period], Decimal(0)) / Decimal(period)
+    start = period * 2
+    if start < size:
+        out[start] = _q(adx_value)
+    for offset, dx in enumerate(dx_values[period:], start=start + 1):
+        if offset >= size:
+            break
+        adx_value = (adx_value * (period - 1) + dx) / Decimal(period)
+        out[offset] = _q(adx_value)
+    return out
+
+
 def rsi(closes: list[Decimal], period: int = 14) -> list[Decimal | None]:
     if period < 1:
         raise ValueError("period must be positive")

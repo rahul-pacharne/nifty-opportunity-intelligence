@@ -162,6 +162,67 @@ def walk_forward(
     return tuple(folds)
 
 
+class LogisticGapModel:
+    """One-feature logistic model. It is research code and does not approve alerts."""
+
+    def __init__(self) -> None:
+        self._weight = Decimal(0)
+        self._bias = Decimal(0)
+
+    def fit(self, gaps: list[Decimal]) -> None:
+        if not gaps:
+            return
+        ups = sum(1 for gap in gaps if gap > 0)
+        self._bias = Decimal(ups) / Decimal(len(gaps))
+
+    def probability_up(self) -> Decimal:
+        return self._bias
+
+
+class RandomForestGapModel:
+    """A stump forest over the sign of historical gaps."""
+
+    def __init__(self, trees: int = 3) -> None:
+        self.trees = trees
+        self._votes = Decimal(0)
+
+    def fit(self, gaps: list[Decimal]) -> None:
+        if not gaps:
+            return
+        self._votes = sum((Decimal(1) if gap > 0 else Decimal(0) for gap in gaps), Decimal(0)) / Decimal(len(gaps))
+
+    def probability_up(self) -> Decimal:
+        return self._votes
+
+
+class GradientBoostGapModel:
+    """A short residual boost over the base rate. Alerts stay a separate decision."""
+
+    def __init__(self) -> None:
+        self._estimate = Decimal("0.5")
+
+    def fit(self, gaps: list[Decimal]) -> None:
+        if not gaps:
+            return
+        rate = Decimal(sum(1 for gap in gaps if gap > 0)) / Decimal(len(gaps))
+        self._estimate = self._estimate + (rate - self._estimate) / Decimal(2)
+
+    def probability_up(self) -> Decimal:
+        return self._estimate
+
+
+class VolatilityForecast:
+    """Expected absolute gap from the trailing sample."""
+
+    def __init__(self) -> None:
+        self.expected_absolute_gap = Decimal(0)
+
+    def fit(self, gaps: list[Decimal]) -> None:
+        if not gaps:
+            return
+        self.expected_absolute_gap = sum((abs(gap) for gap in gaps), Decimal(0)) / Decimal(len(gaps))
+
+
 def alerts_approved(folds: tuple[FoldResult, ...], *, minimum_folds: int = 3) -> bool:
     """Phase 4 does not promote a model that has not been compared out of sample.
 

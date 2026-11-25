@@ -187,26 +187,37 @@ def test_req_quarantine_impossible_ohlc_duplicate_stale_and_missing_price() -> N
 
 
 def test_req_remaining_quarantine_categories_are_implemented() -> None:
-    """Section 5 lists these categories. The test does not invent reason-code strings."""
-    required = {
+    """Section 5 lists these categories. Reasons come back from the validators."""
+    from app.data.validation import contract_issue, timestamp_issue
+
+    found = {
+        contract_issue(instrument_id="", strike=Decimal("1"), expiry=None, quote_date=date(2026, 11, 20)),
+        timestamp_issue(datetime(2026, 11, 20, 10, 0)),
+        contract_issue(
+            instrument_id="NIFTY",
+            strike=Decimal("-1"),
+            expiry=date(2026, 12, 1),
+            quote_date=date(2026, 11, 20),
+        ),
+        contract_issue(
+            instrument_id="NIFTY",
+            strike=Decimal("24000"),
+            expiry=date(2026, 11, 1),
+            quote_date=date(2026, 11, 20),
+        ),
+        apply_validation(
+            _bar(date(2026, 11, 20), "100", "180"),
+            previous_close=Decimal("100"),
+            max_jump_fraction=Decimal("0.2"),
+        ).quality_reason,
+    }
+    assert found >= {
         "bad identifier",
         "bad timestamp",
         "bad strike",
         "inconsistent expiry",
         "unexpected discontinuity",
     }
-    implemented = {
-        "non_positive_price": "missing price",
-        "high_below_extreme": "impossible ohlc",
-        "low_above_extreme": "impossible ohlc",
-        "naive_timestamp": "bad timestamp",
-        "missing_lineage": "bad identifier",
-        "stale_quote": "stale quote",
-        "duplicate": "duplicate",
-    }
-    covered = set(implemented.values())
-    missing = sorted(required - covered)
-    assert missing == []
 
 
 def test_req_failed_collection_does_not_recommend() -> None:
@@ -239,6 +250,7 @@ def test_req_put_recommendation_includes_the_documented_greeks() -> None:
     decision = decide(
         _eligible(
             direction="down",
+            strong_probability=Decimal("0.70"),
             quote=_quote(option_type="PUT", delta=Decimal("-0.62")),
         )
     )

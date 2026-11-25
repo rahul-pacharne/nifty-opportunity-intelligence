@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
-from app.core.constants import DEFAULT_STRONG_GAP_PERCENT
+from app.core.constants import DEFAULT_STRONG_GAP_PERCENT, IndexSymbol
 
 
 def _q(value: Decimal) -> Decimal:
@@ -38,6 +38,7 @@ class TrackedTrade:
     kind: str
     entry_premium: Decimal
     exit_premium: Decimal
+    index: IndexSymbol | None = None
 
     @property
     def pnl(self) -> Decimal:
@@ -54,8 +55,17 @@ class Scorecard:
     profit_factor: Decimal | None
 
 
-def scorecard(trades: list[TrackedTrade], kind: str) -> Scorecard:
-    selected = [trade for trade in trades if trade.kind == kind]
+def scorecard(
+    trades: list[TrackedTrade],
+    kind: str,
+    *,
+    index: IndexSymbol | None = None,
+) -> Scorecard:
+    selected = [
+        trade
+        for trade in trades
+        if trade.kind == kind and (index is None or trade.index is index)
+    ]
     wins = [trade.pnl for trade in selected if trade.pnl > 0]
     losses = [trade.pnl for trade in selected if trade.pnl < 0]
     gross_profit = sum(wins, Decimal(0))

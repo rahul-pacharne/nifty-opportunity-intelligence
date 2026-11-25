@@ -71,7 +71,7 @@ def test_lot_premium_above_the_risk_limit_is_no_trade() -> None:
 
 
 def test_passing_call_is_a_manual_recommendation() -> None:
-    decision = decide(_input(_quote()))
+    decision = decide(_input(_quote(), strong_probability=Decimal("0.70")))
     assert decision is Recommendation.BUY_CALL
 
 

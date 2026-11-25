@@ -37,6 +37,7 @@ class EligibilityInput:
     max_positions: int
     data_ok: bool
     quantity: int = 1
+    strong_probability: Decimal | None = None
     minimum_net: Decimal = Decimal("0")
     max_spread_fraction: Decimal = Decimal("0.05")
     minimum_volume: int = 1
@@ -55,6 +56,18 @@ def expected_net_value(expected_gross: Decimal, costs: Decimal) -> Decimal:
     return expected_gross - costs
 
 
+def expected_value(
+    *,
+    p_win: Decimal,
+    avg_profit: Decimal,
+    p_loss: Decimal,
+    avg_loss: Decimal,
+    costs: Decimal,
+) -> Decimal:
+    """Section 8.3: P(win) x average profit - P(loss) x average loss - costs."""
+    return p_win * avg_profit - p_loss * avg_loss - costs
+
+
 def delta_in_research_band(delta: Decimal) -> bool:
     magnitude = abs(delta)
     return any(low <= magnitude <= high for low, high in _DELTA_BANDS)
@@ -67,7 +80,7 @@ def select_by_delta(quotes: list[ContractQuote], target: Decimal) -> ContractQuo
 
 
 def decide(item: EligibilityInput) -> Recommendation:
-    if not item.data_ok or item.quote is None:
+    if not item.data_ok or item.quote is None or item.strong_probability is None:
         return Recommendation.NO_TRADE
     if item.open_positions >= item.max_positions:
         return Recommendation.NO_TRADE

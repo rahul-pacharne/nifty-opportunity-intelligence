@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from app.core.constants import QualityStatus
@@ -34,8 +34,42 @@ def quarantine_reason(bar: Bar, *, now: datetime | None = None, max_age: timedel
     return None
 
 
-def apply_validation(bar: Bar, *, now: datetime | None = None, max_age: timedelta | None = None) -> Bar:
+def apply_validation(
+    bar: Bar,
+    *,
+    now: datetime | None = None,
+    max_age: timedelta | None = None,
+    previous_close: Decimal | None = None,
+    max_jump_fraction: Decimal | None = None,
+) -> Bar:
     reason = quarantine_reason(bar, now=now, max_age=max_age)
+    if reason is None and previous_close is not None and previous_close > 0 and max_jump_fraction is not None:
+        jump = abs(bar.close - previous_close) / previous_close
+        if jump > max_jump_fraction:
+            reason = "unexpected discontinuity"
     if reason is None:
         return bar
     return replace(bar, quality=QualityStatus.QUARANTINED, quality_reason=reason)
+
+
+def contract_issue(
+    *,
+    instrument_id: str,
+    strike: Decimal | None,
+    expiry: date | None,
+    quote_date: date,
+) -> str | None:
+    """Spec section 5 categories, using the document's own words."""
+    if not instrument_id:
+        return "bad identifier"
+    if strike is None or strike <= 0:
+        return "bad strike"
+    if expiry is not None and expiry < quote_date:
+        return "inconsistent expiry"
+    return None
+
+
+def timestamp_issue(moment: datetime) -> str | None:
+    if moment.tzinfo is None:
+        return "bad timestamp"
+    return None
