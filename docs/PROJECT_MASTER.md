@@ -106,6 +106,8 @@ A live message is filled from model output. Example numbers in the specification
 
 Commands `/start`, `/status`, `/today`, `/signals`, `/performance`, `/accept`, `/ignore`, `/entered`, `/exit` update records only.
 
+Fictional formats for watch, prepare, buy call, buy put, no trade, strengthening, invalidation, premarket confirmation, missed entry, and the daily and weekly reports are in `docs/SAMPLE_ALERTS.md`. A buy alert includes the contract, a maximum entry premium, an illustrative current premium, and the entry conditions. A sell or cancel is an invalidation or a no-new-entry alert, not an automatic order.
+
 ## 10. Stack and layout
 
 Python 3.10+, FastAPI when the API is served, PostgreSQL, pandas and NumPy when tabular research runs, custom or pandas-ta indicators, scikit-learn and gradient boosting when fitted models are trained, APScheduler, httpx, Docker on AWS, structured logs, pytest, GitHub Actions.
