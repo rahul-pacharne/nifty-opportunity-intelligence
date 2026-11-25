@@ -29,6 +29,7 @@ class Settings:
     max_risk_fraction: Decimal
     strategy_capital: Decimal | None
     telegram_allowed_user_ids: tuple[str, ...]
+    telegram_bot_token: str | None
     upstox_access_token: str | None
 
     @classmethod
@@ -40,6 +41,7 @@ class Settings:
             if part.strip()
         )
         token = os.environ.get("UPSTOX_ACCESS_TOKEN", "").strip() or None
+        bot_token = os.environ.get("NOI_TELEGRAM_BOT_TOKEN", "").strip() or None
         return cls(
             database_url=os.environ.get(
                 "NOI_DATABASE_URL",
@@ -53,5 +55,6 @@ class Settings:
             max_risk_fraction=_decimal("NOI_MAX_RISK_FRACTION", DEFAULT_MAX_RISK_FRACTION),
             strategy_capital=Decimal(capital_raw) if capital_raw else None,
             telegram_allowed_user_ids=allowed,
+            telegram_bot_token=bot_token,
             upstox_access_token=token,
         )
