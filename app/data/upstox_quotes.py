@@ -17,6 +17,8 @@ from app.data.models import Bar
 IST = ZoneInfo("Asia/Kolkata")
 QUOTES_URL = "https://api.upstox.com/v2/market-quote/quotes"
 QUOTE_MAX_AGE = timedelta(minutes=20)
+# The quote host rejects Python's default client name before it reads the token.
+USER_AGENT = "NOI/0.1"
 
 # Upstox instrument keys. The stored id is the one the decision loop already uses.
 INDEX_KEYS = (
@@ -31,35 +33,77 @@ class QuoteResult:
     bars: tuple[Bar, ...]
     missing: tuple[str, ...]
     error: str | None
+    detail: str | None = None
+
+
+def _missing() -> tuple[str, ...]:
+    return tuple(instrument_id for _, instrument_id in INDEX_KEYS)
+
+
+def _failed(error: str, detail: str | None = None) -> QuoteResult:
+    return QuoteResult((), _missing(), error, detail)
 
 
 def fetch_index_quotes(token: str, *, now: datetime, opener=urlopen) -> QuoteResult:
     if not token or now.tzinfo is None:
-        return QuoteResult((), tuple(instrument_id for _, instrument_id in INDEX_KEYS), "unavailable")
+        return _failed("unavailable")
     query = urlencode({"instrument_key": ",".join(key for key, _ in INDEX_KEYS)}, quote_via=quote)
     request = Request(
         f"{QUOTES_URL}?{query}",
-        headers={"Accept": "application/json", "Authorization": f"Bearer {token}"},
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": USER_AGENT,
+        },
         method="GET",
     )
     try:
         with opener(request, timeout=20) as response:
             payload = json.loads(response.read().decode())
     except HTTPError as exc:
-        error = "unauthorized" if exc.code == 401 else "unavailable"
-        return QuoteResult((), tuple(instrument_id for _, instrument_id in INDEX_KEYS), error)
+        return _http_failure(exc)
     except (URLError, TimeoutError, json.JSONDecodeError, OSError):
-        return QuoteResult((), tuple(instrument_id for _, instrument_id in INDEX_KEYS), "unavailable")
+        return _failed("unavailable", "network")
     return parse_index_quotes(payload, now=now)
+
+
+def _http_failure(exc: HTTPError) -> QuoteResult:
+    error = "unauthorized" if exc.code == 401 else "unavailable"
+    detail = f"http {exc.code}"
+    try:
+        raw = exc.read(2000).decode("utf-8", errors="replace")
+        payload = json.loads(raw)
+    except Exception:
+        payload = None
+    code = _error_code(payload) if isinstance(payload, dict) else None
+    if code == "UDAPI100050":
+        error = "unauthorized"
+    if code:
+        detail = code
+    return _failed(error, detail)
+
+
+def _error_code(payload: dict | None) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    errors = payload.get("errors")
+    if not isinstance(errors, list) or not errors or not isinstance(errors[0], dict):
+        return None
+    code = str(errors[0].get("errorCode") or errors[0].get("error_code") or "")
+    if code.startswith("UDAPI") and code[5:].isdigit():
+        return code
+    return None
 
 
 def parse_index_quotes(payload: dict, *, now: datetime) -> QuoteResult:
     if now.tzinfo is None:
-        return QuoteResult((), tuple(instrument_id for _, instrument_id in INDEX_KEYS), "unavailable")
+        return _failed("unavailable")
     status = payload.get("status")
     data = payload.get("data")
     if status not in (None, "success") or not isinstance(data, dict):
-        return QuoteResult((), tuple(instrument_id for _, instrument_id in INDEX_KEYS), "unavailable")
+        code = _error_code(payload)
+        error = "unauthorized" if code == "UDAPI100050" else "unavailable"
+        return _failed(error, code)
     found: dict[str, Bar] = {}
     for feed_key, raw in data.items():
         if not isinstance(raw, dict):
