@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from app.core.constants import Horizon, IndexSymbol, Recommendation
 from app.data.calendar import MarketCalendar
-from app.data.models import Bar
+from app.data.models import Bar, latest_session_bars
 from app.data.repository import ObservationRepository
 from app.features.technical import ema
 from app.intelligence.prediction import BaseRateModel
@@ -79,7 +79,7 @@ class DecisionLoop:
                 feature_ema=None,
                 latest_bar_date=None,
             )
-        ordered = tuple(sorted(visible, key=lambda bar: bar.market_date))
+        ordered = latest_session_bars(visible)
         closes = [bar.close for bar in ordered]
         feature = ema(closes, 5)[-1]
         gaps = [

@@ -14,7 +14,7 @@ from app.core.constants import (
     QualityStatus,
 )
 from app.data.calendar import MarketCalendar
-from app.data.models import Bar
+from app.data.models import Bar, latest_session_bars
 
 
 def opening_gap_percent(prior_close: Decimal, next_open: Decimal) -> Decimal:
@@ -53,8 +53,7 @@ class GapObservation:
 
 
 def _by_date(bars: tuple[Bar, ...]) -> dict[date, Bar]:
-    ordered = sorted(bars, key=lambda bar: bar.market_date)
-    return {bar.market_date: bar for bar in ordered}
+    return {bar.market_date: bar for bar in latest_session_bars(bars)}
 
 
 def gap_observations(

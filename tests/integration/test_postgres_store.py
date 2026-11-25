@@ -7,6 +7,7 @@ import pytest
 
 from app.core.constants import IndexSymbol, QualityStatus, Recommendation
 from app.data.models import Bar
+from app.data.upstox_quotes import QUOTE_MAX_AGE, parse_index_quotes
 from app.runtime.persistence import PostgresStore, open_store
 from app.runtime.exits import ExitRules
 from app.runtime.live_runner import run_clock
@@ -104,6 +105,40 @@ def test_usable_rows_hide_future_publication_and_keep_corrections(database_url: 
     assert report.duplicate_keys == ("NIFTY|2026-11-20|fixture|1",)
     with pytest.raises(ValueError):
         store.usable_as_of(datetime(2026, 11, 20, 12, 0))
+    store.close()
+
+
+def test_a_stale_upstox_quote_is_stored_and_hidden_from_decisions(database_url: str) -> None:
+    now = datetime(2026, 11, 25, 17, 15, tzinfo=timezone.utc)
+    payload = {
+        "status": "success",
+        "data": {
+            "NSE_INDEX:Nifty 50": {
+                "instrument_token": "NSE_INDEX|Nifty 50",
+                "last_price": 26180.25,
+                "timestamp": "2026-11-25T15:15:00+05:30",
+                "ohlc": {"open": 26100, "high": 26200, "low": 26050, "close": 26090},
+            },
+            "NSE_INDEX:Nifty Bank": {
+                "instrument_token": "NSE_INDEX|Nifty Bank",
+                "last_price": 55210.5,
+                "timestamp": "2026-11-25T15:15:00+05:30",
+                "ohlc": {"open": 55100, "high": 55300, "low": 55000, "close": 55120},
+            },
+            "NSE_INDEX:India VIX": {
+                "instrument_token": "NSE_INDEX|India VIX",
+                "last_price": 13.42,
+                "timestamp": "2026-11-25T15:15:00+05:30",
+                "ohlc": {"open": 13.1, "high": 13.8, "low": 12.9, "close": 13.2},
+            },
+        },
+    }
+    parsed = parse_index_quotes(payload, now=now)
+    store = open_store(database_url)
+    stored = [store.add(bar, now=now, max_age=QUOTE_MAX_AGE) for bar in parsed.bars]
+    assert [bar.quality_reason for bar in stored] == ["stale_quote", "stale_quote", "stale_quote"]
+    assert store.usable_as_of(now, "NIFTY") == ()
+    assert store.counts()["market_observations"] == 3
     store.close()
 
 

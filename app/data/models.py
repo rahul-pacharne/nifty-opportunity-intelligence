@@ -40,6 +40,16 @@ class Bar:
         return self.publication_at or self.observation_at
 
 
+def latest_session_bars(bars: tuple[Bar, ...] | list[Bar]) -> tuple[Bar, ...]:
+    """One bar per session. A later publication replaces an earlier one for that date."""
+    chosen: dict[date, Bar] = {}
+    for bar in bars:
+        current = chosen.get(bar.market_date)
+        if current is None or bar.available_at >= current.available_at:
+            chosen[bar.market_date] = bar
+    return tuple(chosen[day] for day in sorted(chosen))
+
+
 @dataclass(frozen=True)
 class CoverageReport:
     first_date: date | None
