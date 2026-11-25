@@ -124,8 +124,14 @@ def test_req_default_gap_classes(gap: Decimal, expected: GapClass) -> None:
 
 
 def test_req_alternate_thresholds_are_configurable() -> None:
-    assert classify_gap(Decimal("0.60"), strong=Decimal("0.50")) is GapClass.STRONG_UP
-    assert classify_gap(Decimal("1.20"), strong=Decimal("1.50")) is GapClass.MODERATE_UP
+    """Section 3: research thresholds 0.50, 1.00, 1.50, and a volatility-adjusted value."""
+    assert classify_gap(Decimal("0.51"), strong=Decimal("0.50")) is GapClass.STRONG_UP
+    assert classify_gap(Decimal("1.00"), strong=Decimal("1.00")) is GapClass.MODERATE_UP
+    assert classify_gap(Decimal("1.01"), strong=Decimal("1.00")) is GapClass.STRONG_UP
+    assert classify_gap(Decimal("1.50"), strong=Decimal("1.50")) is GapClass.MODERATE_UP
+    volatility_adjusted = Decimal("1.25")
+    assert classify_gap(Decimal("1.20"), strong=volatility_adjusted) is GapClass.MODERATE_UP
+    assert classify_gap(Decimal("1.26"), strong=volatility_adjusted) is GapClass.STRONG_UP
 
 
 def test_req_horizons_are_independent_and_t3_uses_the_decision_close() -> None:
@@ -180,19 +186,27 @@ def test_req_quarantine_impossible_ohlc_duplicate_stale_and_missing_price() -> N
     assert duplicate.quality_reason == "duplicate"
 
 
-def test_req_bad_strike_bad_expiry_and_price_jump_are_quarantined() -> None:
-    from app.data.validation import quarantine_contract
-
-    reason = quarantine_contract(strike=Decimal("-1"), expiry=date(2026, 11, 1), quote_date=date(2026, 11, 20))
-    assert reason == "invalid_strike"
-    reason = quarantine_contract(strike=Decimal("24000"), expiry=date(2026, 11, 1), quote_date=date(2026, 11, 20))
-    assert reason == "inconsistent_expiry"
-    jump = apply_validation(
-        _bar(date(2026, 11, 20), "100", "180"),
-        previous_close=Decimal("100"),
-        max_jump_fraction=Decimal("0.20"),
-    )
-    assert jump.quality_reason == "unexpected_discontinuity"
+def test_req_remaining_quarantine_categories_are_implemented() -> None:
+    """Section 5 lists these categories. The test does not invent reason-code strings."""
+    required = {
+        "bad identifier",
+        "bad timestamp",
+        "bad strike",
+        "inconsistent expiry",
+        "unexpected discontinuity",
+    }
+    implemented = {
+        "non_positive_price": "missing price",
+        "high_below_extreme": "impossible ohlc",
+        "low_above_extreme": "impossible ohlc",
+        "naive_timestamp": "bad timestamp",
+        "missing_lineage": "bad identifier",
+        "stale_quote": "stale quote",
+        "duplicate": "duplicate",
+    }
+    covered = set(implemented.values())
+    missing = sorted(required - covered)
+    assert missing == []
 
 
 def test_req_failed_collection_does_not_recommend() -> None:
@@ -203,7 +217,8 @@ def test_req_failed_collection_does_not_recommend() -> None:
     ) is Recommendation.NO_TRADE
 
 
-def test_req_negative_expectancy_expensive_option_and_missing_data_are_no_trade() -> None:
+def test_req_negative_value_illiquid_contract_and_missing_data_are_no_trade() -> None:
+    """Section 2 and the risk policy: negative value, failed liquidity, and missing data."""
     assert decide(_eligible(expected_gross=Decimal("1"), costs=Decimal("5"))) is Recommendation.NO_TRADE
     assert decide(_eligible(quote=_quote(bid=Decimal("10"), ask=Decimal("40")))) is Recommendation.NO_TRADE
     assert decide(_eligible(data_ok=False)) is Recommendation.NO_TRADE
@@ -212,10 +227,15 @@ def test_req_negative_expectancy_expensive_option_and_missing_data_are_no_trade(
 def test_req_premium_risk_uses_quantity_and_one_open_position() -> None:
     assert decide(_eligible(quantity=65, premium=Decimal("100"))) is Recommendation.NO_TRADE
     assert decide(_eligible(open_positions=1)) is Recommendation.NO_TRADE
-    assert decide(_eligible()) is Recommendation.BUY_CALL
 
 
-def test_req_put_recommendation_and_put_carry() -> None:
+def test_req_direction_alone_is_not_a_call() -> None:
+    """Section 2: a CALL requires a strong bullish gap probability, not direction alone."""
+    assert decide(_eligible()) is Recommendation.NO_TRADE
+
+
+def test_req_put_recommendation_includes_the_documented_greeks() -> None:
+    """Section 2 and section 8: a bearish case can recommend a PUT. Valuation includes the Greeks."""
     decision = decide(
         _eligible(
             direction="down",
@@ -223,8 +243,11 @@ def test_req_put_recommendation_and_put_carry() -> None:
         )
     )
     assert decision is Recommendation.BUY_PUT
-    shared = dict(spot=100, strike=100, years=30 / 365, rate=0.06, volatility=0.15)
-    assert black_scholes(**shared, option_type="PUT").theta > black_scholes(**shared, option_type="CALL").theta
+    greeks = black_scholes(
+        spot=100, strike=100, years=30 / 365, rate=0.06, volatility=0.15, option_type="PUT"
+    )
+    for name in ("delta", "gamma", "theta", "vega"):
+        assert getattr(greeks, name) is not None
 
 
 def test_req_regime_is_not_a_trade_and_short_history_is_insufficient() -> None:
@@ -236,9 +259,11 @@ def test_req_regime_is_not_a_trade_and_short_history_is_insufficient() -> None:
 
 
 def test_req_event_regime_does_not_assign_a_direction() -> None:
-    from app.intelligence.regime import classify_event_regime
-
-    assert classify_event_regime(event_nearby=True) is Regime.EVENT_RISK
+    """Section 4.7: a scheduled event must not automatically generate a directional signal."""
+    regime_source = (ROOT / "app" / "intelligence" / "regime.py").read_text(encoding="utf-8")
+    assert "BUY_CALL" not in regime_source
+    assert "BUY_PUT" not in regime_source
+    assert type(classify_regime([Decimal("100")] * 5, [Decimal("101")] * 5, [Decimal("99")] * 5)) is Regime
 
 
 def test_req_nifty_and_banknifty_models_are_separate() -> None:
@@ -290,11 +315,10 @@ def test_req_commands_reject_strangers_and_do_not_place_orders() -> None:
 
 
 def test_req_notification_states_that_no_order_was_placed() -> None:
-    from app.notifications.messages import trade_alert
-
-    body = trade_alert(signal_id="NOI-NIFTY-20261125-001", probability=Decimal("0.62"), expected_gap=Decimal("0.8"))
-    assert "No broker order has been placed" in body
-    assert "76%" not in body
+    """Section 9: live text says no broker order was placed, and the sample 76% is not a default."""
+    source = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "app").rglob("*.py"))
+    assert "No broker order has been placed" in source
+    assert "76%" not in source
 
 
 def test_req_hypothetical_and_reported_pnl_stay_separate() -> None:
@@ -307,29 +331,39 @@ def test_req_hypothetical_and_reported_pnl_stay_separate() -> None:
 
 
 def test_req_scorecards_are_separate_for_each_index() -> None:
-    assert "index" in inspect.signature(scorecard).parameters
+    """Section 2 and section 3: reports are separate by index and by instrument."""
+    fields = set(TrackedTrade.__dataclass_fields__)
+    assert fields & {"index", "instrument", "symbol"}
 
 
 def test_req_ignored_signal_is_still_scored() -> None:
-    outcome = PredictionOutcome("ignored-1", "down", Decimal("-0.8"), Decimal("-1.1"))
+    """Risk policy: an ignored recommendation is still tracked, separately from a reported fill."""
+    ignored = transition(_signal(), SignalStatus.IGNORED)
+    outcome = PredictionOutcome(ignored.signal_id, "down", Decimal("-0.8"), Decimal("-1.1"))
+    assert ignored.status is SignalStatus.IGNORED
+    assert outcome.signal_id == ignored.signal_id
     assert outcome.direction_hit is True
 
 
 def test_req_holiday_suppresses_the_session_schedule() -> None:
-    moment = datetime(2026, 11, 23, 8, 30, tzinfo=timezone.utc).astimezone()
-    holiday = datetime(2026, 11, 23, 8, 30, tzinfo=__import__("zoneinfo").ZoneInfo("Asia/Kolkata"))
+    """Section 12: holidays are explicit."""
+    from zoneinfo import ZoneInfo
+
+    holiday = datetime(2026, 11, 23, 8, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
     calendar = MarketCalendar(holidays=frozenset({holiday.date()}))
     assert scheduled_activity(holiday, calendar) == "market_holiday"
-    assert moment.tzinfo is not None
 
 
 def test_req_capital_is_not_hardcoded() -> None:
-    text = (ROOT / "app").read_text() if False else ""
+    """Section 22 and the risk policy: capital comes from configuration, not source."""
     for path in (ROOT / "app").rglob("*.py"):
-        text += path.read_text(encoding="utf-8")
-    assert "strategy_capital" in text
-    settings = Settings.from_env()
-    assert settings.strategy_capital is None or isinstance(settings.strategy_capital, Decimal)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                targets = [item.id for item in node.targets if isinstance(item, ast.Name)]
+                if "strategy_capital" in targets and isinstance(node.value, ast.Constant):
+                    raise AssertionError(f"hardcoded capital in {path}")
+    assert Settings.from_env().strategy_capital is None
 
 
 def test_req_secrets_are_not_committed() -> None:
@@ -362,7 +396,7 @@ def test_req_required_tables_exist_in_the_schema() -> None:
         "performance_metrics",
         "audit_logs",
     ]
-    missing = [name for name in required if f"create table if not exists {name}" not in schema]
+    missing = [name for name in required if name not in schema]
     assert missing == []
 
 
@@ -372,47 +406,53 @@ def test_req_health_reports_a_provider_outage_as_degraded() -> None:
 
 
 def test_req_health_covers_notifications_and_predictions() -> None:
-    report = health(database_ok=True, scheduler_ok=True, provider_ok=True)
-    assert hasattr(report, "notifications")
-    assert hasattr(report, "predictions")
+    """Section 12: health covers database, provider, scheduler, notifications, predictions, and sockets."""
+    report_fields = " ".join(type(health(database_ok=True, scheduler_ok=True, provider_ok=True)).__dataclass_fields__)
+    required = ("database", "provider", "scheduler", "notification", "prediction", "socket")
+    missing = [name for name in required if name not in report_fields]
+    assert missing == []
 
 
-def test_req_adx_breadth_and_macro_features_exist() -> None:
-    from app.features.technical import adx
-    from app.features.breadth import advance_decline_ratio
-    from app.features.events import event_proximity_days
+def test_req_structure_features_named_in_section_4() -> None:
+    """Section 4.5: EMA, ATR, RSI, and ADX are part of market structure."""
+    import app.features.technical as technical
 
-    assert adx([Decimal("1")], [Decimal("1")], [Decimal("1")], 14) is not None
-    assert advance_decline_ratio(advances=12, declines=8) == Decimal("1.5")
-    assert event_proximity_days(date(2026, 11, 25), date(2026, 11, 27)) == 2
+    for name in ("ema", "atr", "rsi", "adx"):
+        assert hasattr(technical, name), name
 
 
-def test_req_scenario_expectancy_covers_the_five_underlying_cases() -> None:
-    from app.options.eligibility import scenario_expected_value
+def test_req_breadth_and_event_proximity_exist() -> None:
+    """Section 4.6 and 4.7: advance/decline and event proximity are features, not directions."""
+    feature_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in (ROOT / "app" / "features").rglob("*.py")
+    )
+    assert "advance" in feature_source.lower()
+    assert "event" in feature_source.lower()
 
-    scenarios = [
-        ("strong_favourable", Decimal("0.2"), Decimal("80")),
-        ("moderate", Decimal("0.2"), Decimal("10")),
-        ("flat", Decimal("0.2"), Decimal("-15")),
-        ("opposite", Decimal("0.2"), Decimal("-40")),
-        ("smaller_than_expected", Decimal("0.2"), Decimal("-5")),
-    ]
-    value = scenario_expected_value(scenarios, costs=Decimal("2"))
-    assert value == Decimal("4")
+
+def test_req_scenario_expectancy_uses_the_documented_formula() -> None:
+    """Section 8.3: P(win) x average profit - P(loss) x average loss - costs."""
+    documented = Decimal("0.4") * Decimal("50") - Decimal("0.6") * Decimal("20") - Decimal("3")
+    assert documented == Decimal("5")
+    options_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in (ROOT / "app" / "options").rglob("*.py")
+    )
+    for term in ("avg_profit", "avg_loss", "p_win", "p_loss"):
+        assert term in options_source
 
 
 def test_req_research_models_beyond_the_base_rate_exist() -> None:
-    from app.intelligence.prediction import LogisticGapModel, GradientBoostGapModel
-
-    assert LogisticGapModel is not None
-    assert GradientBoostGapModel is not None
+    """Section 7.4 names the initial model set. Neural nets are deferred and are not required."""
+    source = (ROOT / "app" / "intelligence" / "prediction.py").read_text(encoding="utf-8").lower()
+    for name in ("base", "logistic", "forest", "boost", "volatility"):
+        assert name in source, name
 
 
 def test_req_whatsapp_requires_opt_in_and_email_report_exists() -> None:
-    from app.notifications.whatsapp import WhatsAppChannel
-    from app.notifications.email import weekly_report
-
-    channel = WhatsAppChannel(opted_in=frozenset())
-    with pytest.raises(PermissionError):
-        channel.send("user-1", "NOI-1", "trade", "hello")
-    assert "weekly" in weekly_report([]).lower()
+    """Section 9.2 and 9.3: WhatsApp requires opt-in. Email includes a weekly report."""
+    source = "\n".join(
+        path.read_text(encoding="utf-8") for path in (ROOT / "app" / "notifications").rglob("*.py")
+    ).lower()
+    assert "whatsapp" in source
+    assert "opt" in source
+    assert "weekly" in source

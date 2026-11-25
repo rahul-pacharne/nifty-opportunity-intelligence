@@ -39,7 +39,7 @@ Version 1 covers strong gap-up and gap-down detection, early bullish and bearish
 
 Goals: early identification, direction, magnitude, option profitability, timely alerts, an explanation for every recommendation, and a permanent outcome record.
 
-Default gap classes, in percent: strong up > +0.75, moderate up +0.30 to +0.75, flat −0.30 to +0.30, moderate down −0.75 to −0.30, strong down < −0.75. Also test 0.50, 1.00, 1.50, and a volatility-adjusted threshold. The two indices may differ.
+Default gap classes, in percent: strong up > +0.75, moderate up +0.30 to +0.75 including both endpoints, flat strictly between −0.30 and +0.30, moderate down −0.75 to −0.30 including both endpoints, strong down < −0.75. Also test 0.50, 1.00, 1.50, and a volatility-adjusted threshold. The two indices may differ.
 
 Prediction scorecard: directional accuracy, strong-gap precision and recall, calibration, Brier score, magnitude error, false positives, by horizon and by regime.
 

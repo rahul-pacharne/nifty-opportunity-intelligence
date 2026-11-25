@@ -19,10 +19,12 @@ Default classification, in percent:
 | Class | Gap |
 |---|---|
 | Strong gap-up | > +0.75 |
-| Moderate gap-up | +0.30 to +0.75 |
-| Flat | −0.30 to +0.30 |
-| Moderate gap-down | −0.75 to −0.30 |
+| Moderate gap-up | +0.30 to +0.75, including both endpoints |
+| Flat | strictly between −0.30 and +0.30 |
+| Moderate gap-down | −0.75 to −0.30, including both endpoints |
 | Strong gap-down | < −0.75 |
+
+The moderate class owns the shared endpoints. A gap of exactly ±0.30 or exactly ±0.75 is moderate, not flat and not strong.
 
 Direction models estimate P(gap > θ), P(gap < −θ), and P(|gap| ≤ θ). Magnitude models estimate the expected gap, the median, and a lower and upper range.
 
