@@ -39,7 +39,8 @@ def main() -> int:
         print("upstox rejected the token")
         return 1
     if result.error == "unavailable":
-        print("upstox quotes unavailable")
+        detail = f" ({result.detail})" if result.detail else ""
+        print(f"upstox quotes unavailable{detail}")
         return 1
     try:
         from app.runtime.persistence import open_store

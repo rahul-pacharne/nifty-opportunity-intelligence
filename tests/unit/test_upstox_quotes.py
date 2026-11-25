@@ -6,7 +6,7 @@ from urllib.error import HTTPError
 
 from app.data.models import latest_session_bars
 from app.data.models import Bar
-from app.data.upstox_quotes import INDEX_KEYS, QUOTES_URL, fetch_index_quotes, parse_index_quotes
+from app.data.upstox_quotes import INDEX_KEYS, QUOTES_URL, USER_AGENT, fetch_index_quotes, parse_index_quotes
 from app.runtime.decision_loop import DecisionLoop
 from app.core.constants import IndexSymbol, QualityStatus
 
@@ -84,6 +84,7 @@ def test_request_asks_only_for_quotes_and_hides_the_token(monkeypatch) -> None:
     def opener(request, timeout):
         seen["url"] = request.full_url
         seen["authorization"] = request.get_header("Authorization")
+        seen["user_agent"] = request.get_header("User-agent")
         seen["timeout"] = timeout
         body = json.dumps(_payload()).encode()
         return BytesIO(body)
@@ -94,6 +95,7 @@ def test_request_asks_only_for_quotes_and_hides_the_token(monkeypatch) -> None:
     assert seen["url"].startswith(QUOTES_URL)
     assert "order" not in seen["url"]
     assert seen["authorization"] == "Bearer test-token"
+    assert seen["user_agent"] == USER_AGENT
     assert seen["timeout"] == 20
     source = open("app/data/upstox_quotes.py", encoding="utf-8").read()
     assert "test-token" not in source
@@ -104,12 +106,26 @@ def test_request_asks_only_for_quotes_and_hides_the_token(monkeypatch) -> None:
 
 def test_unauthorized_does_not_echo_the_token() -> None:
     def opener(request, timeout):
-        raise HTTPError(request.full_url, 401, "unauthorized", hdrs=None, fp=BytesIO(b"secret test-token"))
+        body = b'{"status":"error","errors":[{"errorCode":"UDAPI100050","message":"Invalid token test-token"}]}'
+        raise HTTPError(request.full_url, 401, "unauthorized", hdrs=None, fp=BytesIO(body))
 
     result = fetch_index_quotes("test-token", now=NOW, opener=opener)
     assert result.error == "unauthorized"
+    assert result.detail == "UDAPI100050"
     assert result.bars == ()
-    assert "test-token" not in result.error
+    assert "test-token" not in (result.error or "")
+    assert "test-token" not in (result.detail or "")
+
+
+def test_blocked_client_name_is_reported_without_the_token() -> None:
+    def opener(request, timeout):
+        body = b'{"title":"Access denied","detail":"blocked test-token"}'
+        raise HTTPError(request.full_url, 403, "forbidden", hdrs=None, fp=BytesIO(body))
+
+    result = fetch_index_quotes("test-token", now=NOW, opener=opener)
+    assert result.error == "unavailable"
+    assert result.detail == "http 403"
+    assert "test-token" not in (result.detail or "")
 
 
 def test_latest_session_bar_replaces_an_earlier_quote() -> None:
