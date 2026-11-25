@@ -68,7 +68,7 @@ def test_stale_quote_cannot_create_a_buy() -> None:
         expected_gross=Decimal("20"),
     )
     assert result.sent == ()
-    assert transport.messages == []
+    assert all(message != "consider_buy_call" for _, message in transport.messages)
     assert loop.records[0].recommendation is Recommendation.NO_TRADE
 
 

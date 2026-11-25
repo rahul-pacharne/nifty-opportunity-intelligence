@@ -66,6 +66,7 @@ def run_clock(
     quote: ContractQuote | None = None,
     capital: Decimal | None = None,
     expected_gross: Decimal = Decimal("0"),
+    alerts_approved: bool = False,
 ) -> ClockResult:
     from app.core.constants import IndexSymbol
 
@@ -88,13 +89,15 @@ def run_clock(
             capital=capital,
             expected_gross=expected_gross,
         )
-        if record.recommendation in {Recommendation.BUY_CALL, Recommendation.BUY_PUT}:
+        if record.recommendation in {Recommendation.WATCHLIST, Recommendation.NO_TRADE}:
+            gateway.deliver(chat_id, record.signal_id, record.recommendation.value, record.recommendation.value)
+        elif alerts_approved and record.recommendation in {Recommendation.BUY_CALL, Recommendation.BUY_PUT}:
             started = datetime.now(tz=moment.tzinfo)
             status = gateway.deliver(chat_id, record.signal_id, "buy", record.recommendation.value)
             elapsed = datetime.now(tz=moment.tzinfo) - started
             if status == "sent" and elapsed <= timedelta(seconds=60):
                 sent.append(record.signal_id)
-    if activity in SELL_ACTIVITIES:
+    if alerts_approved and activity in SELL_ACTIVITIES:
         for signal_id, position in list(book.positions.items()):
             alert = book.check(signal_id, now=moment, entry_session_opened=True)
             if alert is None:
