@@ -1,6 +1,6 @@
 # Scope to make NOI live
 
-**Status:** Not live.  
+**Status:** Packages A–F are implemented in code. The 2–3 month paper window and a real Telegram, WhatsApp, and email provider are still operations, not a fast test.  
 **Goal of this scope:** The owner receives a message when to buy a Nifty or Bank Nifty call or put, and a later message when to sell that option. The owner places every order. NOI never sends an order to a broker.
 
 Live here means release 1.0 in `docs/PROJECT_MASTER.md`: validated alerts on Telegram, with WhatsApp and email as the other channels. Paper alerts come first. A model that has not beaten the historical base rate must not send a buy or a sell.
