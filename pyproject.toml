@@ -3,7 +3,7 @@ name = "nifty-opportunity-intelligence"
 version = "0.1.0"
 description = "Manual gap-opportunity intelligence for Nifty 50 and Bank Nifty."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["psycopg[binary]>=3.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
