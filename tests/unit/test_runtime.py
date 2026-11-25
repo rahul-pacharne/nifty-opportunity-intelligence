@@ -42,6 +42,12 @@ def test_holiday_during_the_session_is_not_live_monitoring() -> None:
     assert scheduled_activity(moment, calendar) == "market_holiday"
 
 
+def test_holiday_premarket_is_not_a_trading_day_job() -> None:
+    moment = datetime(2026, 11, 23, 8, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
+    calendar = MarketCalendar(holidays=frozenset({moment.date()}))
+    assert scheduled_activity(moment, calendar) == "market_holiday"
+
+
 def test_premarket_slot() -> None:
     moment = datetime(2026, 11, 25, 8, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
     assert scheduled_activity(moment) == "premarket_collection"

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 
 from app.core.constants import SignalStatus
-from app.signals.lifecycle import Signal, transition
+from app.signals.lifecycle import InvalidTransition, Signal, transition
 
 
 @dataclass(frozen=True)
@@ -41,13 +41,11 @@ def handle_command(text: str, user_id: str, allowed: tuple[str, ...], signals: d
         if price is None:
             return CommandResult(False, "price_required")
         if command == "/entered":
-            updated = transition(signal, SignalStatus.POSITION_REPORTED)
-            updated = type(updated)(**{**updated.__dict__, "reported_entry": price})
+            updated = replace(transition(signal, SignalStatus.POSITION_REPORTED), reported_entry=price)
             return CommandResult(True, "position_reported", updated, entry_price=price)
-        updated = transition(signal, SignalStatus.CLOSED)
-        updated = type(updated)(**{**updated.__dict__, "reported_exit": price})
+        updated = replace(transition(signal, SignalStatus.CLOSED), reported_exit=price)
         return CommandResult(True, "closed", updated, exit_price=price)
-    except (InvalidOperation, Exception) as exc:
-        if type(exc).__name__ == "InvalidTransition":
-            return CommandResult(False, "invalid_transition")
+    except InvalidTransition:
+        return CommandResult(False, "invalid_transition")
+    except InvalidOperation:
         return CommandResult(False, "invalid_price")

@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
-from app.core.constants import DEFAULT_MODERATE_GAP_PERCENT, DEFAULT_STRONG_GAP_PERCENT, GapClass, Horizon
+from app.core.constants import (
+    DEFAULT_MODERATE_GAP_PERCENT,
+    DEFAULT_STRONG_GAP_PERCENT,
+    GapClass,
+    Horizon,
+    QualityStatus,
+)
 from app.data.calendar import MarketCalendar
 from app.data.models import Bar
 
@@ -70,6 +76,8 @@ def gap_observations(
         target_bar = series.get(target)
         if target_bar is None:
             continue
+        if bar.quality is not QualityStatus.OK or target_bar.quality is not QualityStatus.OK:
+            continue
         gap = opening_gap_percent(bar.close, target_bar.open)
         observations.append(
             GapObservation(
@@ -112,9 +120,9 @@ def continuation_rate(bars: tuple[Bar, ...], calendar: MarketCalendar) -> Decima
         session = series[item.target_date]
         session_move = session.close - session.open
         gap_move = item.next_open - item.prior_close
-        considered += 1
         if session_move == 0 or gap_move == 0:
             continue
+        considered += 1
         if (session_move > 0) == (gap_move > 0):
             matched += 1
     if considered == 0:

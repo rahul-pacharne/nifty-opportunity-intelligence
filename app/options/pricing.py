@@ -49,10 +49,9 @@ def black_scholes(
         delta = _cdf(d1) - 1.0
     gamma = _pdf(d1) / (spot * volatility * sqrt_t)
     vega = spot * _pdf(d1) * sqrt_t / 100.0
-    theta = (
-        -(spot * _pdf(d1) * volatility) / (2.0 * sqrt_t)
-        - rate * strike * discount * (_cdf(d2) if option_type == "CALL" else _cdf(-d2))
-    ) / 365.0
+    # Put carry is added. Call carry is subtracted. Both are per calendar day.
+    carry = rate * strike * discount * (_cdf(d2) if option_type == "CALL" else -_cdf(-d2))
+    theta = (-(spot * _pdf(d1) * volatility) / (2.0 * sqrt_t) - carry) / 365.0
     return Greeks(
         price=Decimal(str(round(price, 4))),
         delta=Decimal(str(round(delta, 4))),

@@ -13,7 +13,7 @@ IST = ZoneInfo("Asia/Kolkata")
 def scheduled_activity(moment: datetime, calendar: MarketCalendar | None = None) -> str:
     local = moment.astimezone(IST)
     calendar = calendar or MarketCalendar()
-    if not calendar.is_session(local.date()) and _during_cash_session(local.hour, local.minute):
+    if not calendar.is_session(local.date()):
         return "market_holiday"
     minutes = local.hour * 60 + local.minute
     if 6 * 60 + 30 <= minutes < 8 * 60:
@@ -37,8 +37,3 @@ def scheduled_activity(moment: datetime, calendar: MarketCalendar | None = None)
     if 16 * 60 <= minutes < 22 * 60:
         return "evening_forecast"
     return "maintenance"
-
-
-def _during_cash_session(hour: int, minute: int) -> bool:
-    minutes = hour * 60 + minute
-    return 9 * 60 + 15 <= minutes <= 15 * 60 + 30

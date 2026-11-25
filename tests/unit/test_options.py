@@ -42,9 +42,12 @@ def test_atm_call_delta_is_near_one_half() -> None:
     assert greeks.price > 0
 
 
-def test_put_delta_is_negative() -> None:
-    greeks = black_scholes(spot=100, strike=100, years=30 / 365, rate=0.06, volatility=0.15, option_type="PUT")
-    assert greeks.delta < 0
+def test_put_delta_is_negative_and_theta_is_above_the_call() -> None:
+    shared = dict(spot=100, strike=100, years=30 / 365, rate=0.06, volatility=0.15)
+    call = black_scholes(**shared, option_type="CALL")
+    put = black_scholes(**shared, option_type="PUT")
+    assert put.delta < 0
+    assert put.theta > call.theta
 
 
 def test_negative_net_value_is_no_trade() -> None:
@@ -54,6 +57,16 @@ def test_negative_net_value_is_no_trade() -> None:
 
 def test_wide_market_is_no_trade() -> None:
     decision = decide(_input(_quote(bid=Decimal("10"), ask=Decimal("20"))))
+    assert decision is Recommendation.NO_TRADE
+
+
+def test_delta_outside_the_research_bands_is_no_trade() -> None:
+    decision = decide(_input(_quote(delta=Decimal("0.10"))))
+    assert decision is Recommendation.NO_TRADE
+
+
+def test_lot_premium_above_the_risk_limit_is_no_trade() -> None:
+    decision = decide(_input(_quote(), premium=Decimal("100"), quantity=65))
     assert decision is Recommendation.NO_TRADE
 
 

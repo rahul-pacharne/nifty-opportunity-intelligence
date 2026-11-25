@@ -57,10 +57,30 @@ def test_repository_hides_rows_published_after_the_decision() -> None:
     assert visible == (early,)
 
 
+def test_valid_resubmission_replaces_a_quarantined_row() -> None:
+    repo = ObservationRepository()
+    rejected = repo.add(_bar(high=Decimal("100")))
+    corrected = repo.add(_bar())
+    visible = repo.usable_as_of(datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc))
+    assert rejected.quality_reason == "high_below_extreme"
+    assert corrected.quality is QualityStatus.OK
+    assert visible == (corrected,)
+
+
+def test_repository_quarantines_a_stale_quote() -> None:
+    repo = ObservationRepository()
+    stored = repo.add(
+        _bar(),
+        now=datetime(2026, 11, 21, 10, 0, tzinfo=timezone.utc),
+        max_age=timedelta(hours=1),
+    )
+    assert stored.quality_reason == "stale_quote"
+
+
 def test_duplicate_does_not_replace_the_original() -> None:
     repo = ObservationRepository()
     original = repo.add(_bar(close=Decimal("24050")))
-    duplicate = repo.add(_bar(close=Decimal("99999")))
+    duplicate = repo.add(_bar(close=Decimal("24080")))
     assert original.quality is QualityStatus.OK
     assert duplicate.quality_reason == "duplicate"
     visible = repo.usable_as_of(datetime(2026, 11, 20, 12, 0, tzinfo=timezone.utc))

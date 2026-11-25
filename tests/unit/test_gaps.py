@@ -1,7 +1,8 @@
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from app.core.constants import GapClass, Horizon
+from app.core.constants import GapClass, Horizon, QualityStatus
 from app.data.calendar import MarketCalendar
 from app.data.models import Bar
 from app.research.gaps import classify_gap, continuation_rate, gap_observations, opening_gap_percent
@@ -54,6 +55,17 @@ def test_t3_label_does_not_use_the_intermediate_open_as_the_prior_close() -> Non
     assert first.prior_close == Decimal("100")
     assert first.next_open == Decimal("103")
     assert first.gap_percent == Decimal("3.0000")
+
+
+def test_quarantined_bar_is_not_a_gap_label() -> None:
+    calendar = MarketCalendar()
+    bad = replace(
+        _bar(date(2026, 11, 19), "100", "100"),
+        quality=QualityStatus.QUARANTINED,
+        quality_reason="stale_quote",
+    )
+    nxt = _bar(date(2026, 11, 20), "110", "110")
+    assert gap_observations((bad, nxt), calendar, Horizon.T1) == ()
 
 
 def test_continuation_uses_the_session_after_the_gap() -> None:

@@ -4,6 +4,22 @@ from app.core.constants import Horizon, IndexSymbol
 from app.intelligence.prediction import BaseRateModel, alerts_approved, walk_forward
 
 
+def test_uneven_buckets_still_sum_to_one() -> None:
+    model = BaseRateModel(IndexSymbol.NIFTY, Horizon.T1, theta=Decimal("0.75"))
+    model.fit([Decimal("1"), Decimal("-1"), Decimal("0")])
+    forecast = model.predict()
+    total = forecast.probability_up + forecast.probability_down + forecast.probability_flat
+    assert total == Decimal("1.0000")
+    assert forecast.data_sufficient is True
+
+
+def test_empty_sample_is_not_a_forecast() -> None:
+    model = BaseRateModel(IndexSymbol.NIFTY, Horizon.T1)
+    forecast = model.predict()
+    assert forecast.data_sufficient is False
+    assert forecast.sample_size == 0
+
+
 def test_probabilities_sum_to_one_and_name_the_index() -> None:
     model = BaseRateModel(IndexSymbol.NIFTY, Horizon.T1, theta=Decimal("0.75"))
     model.fit([Decimal("1"), Decimal("-1"), Decimal("0"), Decimal("0.2")])

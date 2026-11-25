@@ -35,6 +35,27 @@ def test_duplicate_open_signal_is_rejected() -> None:
     assert duplicate_of(existing, _signal(direction="down")) is False
 
 
+def test_expiry_closes_a_notification_and_leaves_a_reported_position() -> None:
+    notified = _signal()
+    reported = _signal(SignalStatus.POSITION_REPORTED)
+    expired, kept = expire_due([notified, reported], notified.expires_at)
+    assert expired.status is SignalStatus.EXPIRED
+    assert kept.status is SignalStatus.POSITION_REPORTED
+
+
+def test_entered_records_a_fill_without_a_prior_accept() -> None:
+    signal = _signal()
+    result = handle_command(
+        "/entered NOI-NIFTY-20261125-001 102.5",
+        "owner",
+        ("owner",),
+        {signal.signal_id: signal},
+    )
+    assert result.signal is not None
+    assert result.signal.status is SignalStatus.POSITION_REPORTED
+    assert result.entry_price == Decimal("102.5")
+
+
 def test_expiry_closes_an_open_signal() -> None:
     signal = _signal()
     expired = expire_due([signal], signal.expires_at)[0]

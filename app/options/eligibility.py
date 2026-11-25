@@ -7,6 +7,11 @@ from decimal import Decimal
 
 from app.core.constants import Recommendation
 
+_DELTA_BANDS = (
+    (Decimal("0.45"), Decimal("0.55")),
+    (Decimal("0.60"), Decimal("0.70")),
+)
+
 
 @dataclass(frozen=True)
 class ContractQuote:
@@ -31,6 +36,7 @@ class EligibilityInput:
     open_positions: int
     max_positions: int
     data_ok: bool
+    quantity: int = 1
     minimum_net: Decimal = Decimal("0")
     max_spread_fraction: Decimal = Decimal("0.05")
     minimum_volume: int = 1
@@ -49,6 +55,11 @@ def expected_net_value(expected_gross: Decimal, costs: Decimal) -> Decimal:
     return expected_gross - costs
 
 
+def delta_in_research_band(delta: Decimal) -> bool:
+    magnitude = abs(delta)
+    return any(low <= magnitude <= high for low, high in _DELTA_BANDS)
+
+
 def select_by_delta(quotes: list[ContractQuote], target: Decimal) -> ContractQuote | None:
     if not quotes:
         return None
@@ -60,9 +71,12 @@ def decide(item: EligibilityInput) -> Recommendation:
         return Recommendation.NO_TRADE
     if item.open_positions >= item.max_positions:
         return Recommendation.NO_TRADE
-    if item.capital is None or item.capital <= 0:
+    if item.capital is None or item.capital <= 0 or item.quantity < 1:
         return Recommendation.NO_TRADE
-    if item.premium > item.capital * item.max_risk_fraction:
+    if not delta_in_research_band(item.quote.delta):
+        return Recommendation.NO_TRADE
+    premium_at_risk = item.premium * Decimal(item.quantity)
+    if premium_at_risk > item.capital * item.max_risk_fraction:
         return Recommendation.NO_TRADE
     width = spread_fraction(item.quote)
     if width is None or width > item.max_spread_fraction or item.quote.volume < item.minimum_volume:

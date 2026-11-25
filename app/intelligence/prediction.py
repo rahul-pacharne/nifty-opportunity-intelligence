@@ -24,6 +24,7 @@ class Forecast:
     lower_gap: Decimal
     upper_gap: Decimal
     sample_size: int
+    data_sufficient: bool = True
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ class BaseRateModel:
                 lower_gap=Decimal(0),
                 upper_gap=Decimal(0),
                 sample_size=0,
+                data_sufficient=False,
             )
         counts = {"up": 0, "down": 0, "flat": 0}
         for gap in gaps:
@@ -86,17 +88,26 @@ class BaseRateModel:
         ordered = sorted(gaps)
         lower = ordered[len(ordered) // 4]
         upper = ordered[min(len(ordered) - 1, (len(ordered) * 3) // 4)]
+        raw = {
+            "up": Decimal(counts["up"]) / total,
+            "down": Decimal(counts["down"]) / total,
+            "flat": Decimal(counts["flat"]) / total,
+        }
+        rounded = {name: _q(value) for name, value in raw.items()}
+        largest = max(rounded, key=lambda name: (raw[name], name))
+        rounded[largest] += Decimal(1) - sum(rounded.values(), Decimal(0))
         return Forecast(
             index=self.index,
             horizon=self.horizon,
             model_version=self.model_version,
-            probability_up=_q(Decimal(counts["up"]) / total),
-            probability_down=_q(Decimal(counts["down"]) / total),
-            probability_flat=_q(Decimal(counts["flat"]) / total),
+            probability_up=rounded["up"],
+            probability_down=rounded["down"],
+            probability_flat=rounded["flat"],
             expected_gap=_q(sum(gaps, Decimal(0)) / total),
             lower_gap=_q(lower),
             upper_gap=_q(upper),
             sample_size=len(gaps),
+            data_sufficient=True,
         )
 
 

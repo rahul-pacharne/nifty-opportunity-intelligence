@@ -21,6 +21,7 @@ _TRANSITIONS: dict[SignalStatus, frozenset[SignalStatus]] = {
     SignalStatus.NOTIFIED: frozenset(
         {
             SignalStatus.MANUALLY_ACCEPTED,
+            SignalStatus.POSITION_REPORTED,
             SignalStatus.IGNORED,
             SignalStatus.INVALIDATED,
             SignalStatus.EXPIRED,
@@ -34,6 +35,10 @@ _TRANSITIONS: dict[SignalStatus, frozenset[SignalStatus]] = {
     SignalStatus.EXPIRED: frozenset(),
     SignalStatus.EVALUATED: frozenset(),
 }
+
+_EXPIRABLE = frozenset(
+    status for status, targets in _TRANSITIONS.items() if SignalStatus.EXPIRED in targets
+)
 
 _OPEN = frozenset(
     {
@@ -74,7 +79,7 @@ def transition(signal: Signal, status: SignalStatus) -> Signal:
 def expire_due(signals: list[Signal], now: datetime) -> list[Signal]:
     updated: list[Signal] = []
     for signal in signals:
-        if signal.status in _OPEN and now >= signal.expires_at:
+        if signal.status in _EXPIRABLE and now >= signal.expires_at:
             updated.append(transition(signal, SignalStatus.EXPIRED))
         else:
             updated.append(signal)

@@ -8,7 +8,7 @@ and duplicate keys are quarantined rather than overwriting history.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.constants import QualityStatus
 from app.data.calendar import MarketCalendar
@@ -24,14 +24,21 @@ class ObservationRepository:
     def __init__(self, calendar: MarketCalendar | None = None) -> None:
         self._calendar = calendar or MarketCalendar()
         self._rows: list[Bar] = []
-        self._seen: set[str] = set()
+        self._usable_keys: set[str] = set()
 
-    def add(self, bar: Bar) -> Bar:
-        stored = apply_validation(bar)
+    def add(
+        self,
+        bar: Bar,
+        *,
+        now: datetime | None = None,
+        max_age: timedelta | None = None,
+    ) -> Bar:
+        stored = apply_validation(bar, now=now, max_age=max_age)
         key = _key(stored)
-        if key in self._seen:
+        if stored.quality is QualityStatus.OK and key in self._usable_keys:
             stored = replace(stored, quality=QualityStatus.QUARANTINED, quality_reason="duplicate")
-        self._seen.add(key)
+        elif stored.quality is QualityStatus.OK:
+            self._usable_keys.add(key)
         self._rows.append(stored)
         return stored
 
