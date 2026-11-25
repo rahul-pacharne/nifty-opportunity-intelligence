@@ -143,7 +143,8 @@ def _bar_from_quote(instrument_id: str, raw: dict, *, now: datetime) -> Bar | No
         return None
     high = max(high, open_price, close)
     low = min(low, open_price, close)
-    exchange_at = _exchange_time(raw.get("timestamp")) or _exchange_time(raw.get("last_trade_time"))
+    # last_trade_time is when the print happened. timestamp is when the feed was refreshed.
+    exchange_at = _exchange_time(raw.get("last_trade_time")) or _exchange_time(raw.get("timestamp"))
     observation_at = exchange_at or now
     version = observation_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     bar = Bar(
@@ -177,20 +178,30 @@ def _decimal(value: object) -> Decimal | None:
 
 
 def _exchange_time(value: object) -> datetime | None:
-    if value is None or value == "":
+    if value is None or value is False or value == "":
         return None
-    if isinstance(value, bool):
-        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.isdigit():
+            return _from_epoch(int(text))
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=IST)
+        return parsed
     if isinstance(value, (int, float)):
-        seconds = float(value) / 1000 if float(value) > 10_000_000_000 else float(value)
-        return datetime.fromtimestamp(seconds, tz=timezone.utc)
-    text = str(value).strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
+        return _from_epoch(float(value))
+    return None
+
+
+def _from_epoch(value: float) -> datetime | None:
+    if value <= 0:
         return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=IST)
-    return parsed
+    seconds = value / 1000 if value > 10_000_000_000 else value
+    return datetime.fromtimestamp(seconds, tz=timezone.utc)

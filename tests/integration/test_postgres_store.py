@@ -108,6 +108,29 @@ def test_usable_rows_hide_future_publication_and_keep_corrections(database_url: 
     store.close()
 
 
+def test_a_feed_clock_after_the_close_does_not_keep_the_quote_fresh(database_url: str) -> None:
+    trade = datetime(2026, 11, 25, 15, 29, 59, tzinfo=IST)
+    now = datetime(2026, 11, 25, 17, 31, tzinfo=timezone.utc)
+    payload = {
+        "status": "success",
+        "data": {
+            "NSE_INDEX:Nifty 50": {
+                "instrument_token": "NSE_INDEX|Nifty 50",
+                "last_price": 25819.25,
+                "timestamp": "2026-11-25T23:00:00+05:30",
+                "last_trade_time": str(int(trade.timestamp() * 1000)),
+                "ohlc": {"open": 25700, "high": 25900, "low": 25650, "close": 25780},
+            }
+        },
+    }
+    parsed = parse_index_quotes(payload, now=now)
+    store = open_store(database_url)
+    stored = store.add(parsed.bars[0], now=now, max_age=QUOTE_MAX_AGE)
+    assert stored.quality_reason == "stale_quote"
+    assert store.usable_as_of(now, "NIFTY") == ()
+    store.close()
+
+
 def test_a_stale_upstox_quote_is_stored_and_hidden_from_decisions(database_url: str) -> None:
     now = datetime(2026, 11, 25, 17, 15, tzinfo=timezone.utc)
     payload = {
