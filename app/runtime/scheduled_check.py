@@ -15,6 +15,10 @@ from app.runtime.schedule import scheduled_activity
 from app.runtime.telegram_gateway import TelegramGateway
 
 REQUIRED = tuple(instrument_id for _, instrument_id in INDEX_KEYS)
+_REASON = {
+    "missing": "no usable price at the check time",
+    "no_probability": "not enough daily history to estimate the next gap",
+}
 
 
 @dataclass(frozen=True)
@@ -50,7 +54,10 @@ def run_scheduled_check(
     for index in (IndexSymbol.NIFTY, IndexSymbol.BANKNIFTY):
         record = loop.decide(index=index, decision_at=now)
         if record.recommendation is Recommendation.NO_TRADE:
-            text = no_trade(signal_id=record.signal_id, reason=record.data_quality)
+            text = no_trade(
+                signal_id=record.signal_id,
+                reason=_REASON.get(record.data_quality, record.data_quality),
+            )
             alert_type = record.recommendation.value
         elif record.recommendation is Recommendation.WATCHLIST:
             text = early_warning(signal_id=record.signal_id, market=index.value)

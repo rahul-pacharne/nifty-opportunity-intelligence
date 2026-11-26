@@ -68,6 +68,21 @@ def test_last_trade_time_wins_over_a_fresh_feed_clock() -> None:
     assert now - nifty.observation_at > timedelta(minutes=20)
 
 
+def test_a_quote_clock_a_few_seconds_ahead_is_clamped_to_receipt() -> None:
+    payload = _payload()
+    payload["data"]["NSE_INDEX:Nifty 50"]["last_trade_time"] = "2026-11-25T15:30:05+05:30"
+    result = parse_index_quotes(payload, now=NOW)
+    assert result.bars[0].observation_at == NOW
+    assert result.bars[0].quality is QualityStatus.OK
+
+
+def test_a_quote_clock_far_ahead_is_quarantined() -> None:
+    payload = _payload()
+    payload["data"]["NSE_INDEX:Nifty 50"]["last_trade_time"] = "2026-11-25T18:00:00+05:30"
+    result = parse_index_quotes(payload, now=NOW)
+    assert result.bars[0].quality_reason == "future_timestamp"
+
+
 def test_a_missing_series_is_incomplete() -> None:
     payload = _payload()
     del payload["data"]["NSE_INDEX:Nifty Bank"]
