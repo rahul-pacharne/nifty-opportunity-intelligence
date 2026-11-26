@@ -19,7 +19,7 @@ from app.core.config import Settings
 from app.notifications.telegram_api import load_env_file, send_message
 from app.runtime.exits import ExitRules
 from app.runtime.live_runner import ENTRY_ACTIVITIES
-from app.runtime.schedule import scheduled_activity
+from app.runtime.schedule import IST, scheduled_activity
 from app.runtime.scheduled_check import run_scheduled_check
 
 
@@ -34,6 +34,7 @@ class _TelegramTransport:
 def main() -> int:
     load_env_file(ROOT / ".env")
     now = datetime.now(timezone.utc)
+    print(now.astimezone(IST).strftime("%Y-%m-%d %H:%M IST"))
     activity = scheduled_activity(now)
     if activity not in ENTRY_ACTIVITIES:
         print(f"activity: {activity}")
