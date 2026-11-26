@@ -145,6 +145,12 @@ def _bar_from_quote(instrument_id: str, raw: dict, *, now: datetime) -> Bar | No
     low = min(low, open_price, close)
     # last_trade_time is when the print happened. timestamp is when the feed was refreshed.
     exchange_at = _exchange_time(raw.get("last_trade_time")) or _exchange_time(raw.get("timestamp"))
+    future_reason = None
+    if exchange_at is not None and exchange_at > now:
+        if exchange_at - now > timedelta(minutes=2):
+            future_reason = "future_timestamp"
+        else:
+            exchange_at = now
     observation_at = exchange_at or now
     version = observation_at.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     bar = Bar(
@@ -160,6 +166,8 @@ def _bar_from_quote(instrument_id: str, raw: dict, *, now: datetime) -> Bar | No
         source="upstox",
         version=version,
     )
+    if future_reason is not None:
+        return replace(bar, quality=QualityStatus.QUARANTINED, quality_reason=future_reason)
     if exchange_at is None:
         return replace(bar, quality=QualityStatus.QUARANTINED, quality_reason="missing_exchange_time")
     return bar

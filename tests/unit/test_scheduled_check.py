@@ -90,6 +90,7 @@ def test_fresh_entry_window_sends_no_trade_and_not_a_buy(monkeypatch) -> None:
     assert len(report.sent) == 2
     assert len(transport.messages) == 2
     assert all("Action: NO TRADE" in text for _, text in transport.messages)
+    assert all("not enough daily history" in text for _, text in transport.messages)
     assert all(record.recommendation is Recommendation.NO_TRADE for record in loop.records)
     assert {record.index for record in loop.records} == {IndexSymbol.NIFTY, IndexSymbol.BANKNIFTY}
     assert "consider_buy_call" not in " ".join(text for _, text in transport.messages)
