@@ -69,7 +69,14 @@ def test_stale_entry_window_sends_nothing(monkeypatch) -> None:
     report = run_scheduled_check(now, token="test-token", loop=loop, gateway=gateway, chat_id="owner")
     assert report.activity == "premarket_collection"
     assert report.action == "degraded"
-    assert transport.messages == []
+    assert report.sent == ("NOI-CHECK-20261125-premarket_collection",)
+    assert len(transport.messages) == 1
+    assert "Action: NO TRADE" in transport.messages[0][1]
+    assert "NIFTY stale_quote" in transport.messages[0][1]
+    assert "consider_buy_call" not in transport.messages[0][1]
+    again = run_scheduled_check(now, token="test-token", loop=loop, gateway=gateway, chat_id="owner")
+    assert again.sent == ()
+    assert len(transport.messages) == 1
 
 
 def test_fresh_entry_window_sends_no_trade_and_not_a_buy(monkeypatch) -> None:
